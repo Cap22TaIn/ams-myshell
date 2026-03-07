@@ -16,9 +16,9 @@ int main() {
       std::cout << "$ ";
       std::string command;
       std::getline(std::cin, command);
-
-      if(trim(command) == "exit") break;
-
-      std::cout << command << ": command not found\n";
+      trim(command);
+      if(command == "exit") break;
+      else if(command.substr(0,5)=="echo ") std::cout<<command.substr(5)<<"\n";
+      else std::cout << command << ": command not found\n";
   }
 }
