@@ -1,32 +1,79 @@
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <unordered_set>
-
-std::string trim(const std::string& s) {
-    size_t l = s.find_first_not_of(" \t\n\r");
-    if (l == std::string::npos) return "";
-    size_t r = s.find_last_not_of(" \t\n\r");
-    return s.substr(l, r - l + 1);
-}
+#include <unistd.h>
+#include <cstdlib>
 
 int main() {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
 
-  std::unordered_set<std::string>builtin({"echo","exit","type"});
+  const std::unordered_set<std::string> builtin = {"echo","exit","type"};
 
+  std::string line;
 
-  while(true){
-      std::cout << "$ ";
-      std::string command;
-      std::getline(std::cin, command);
-      command = trim(command);
-      if(command == "exit") break;
-      else if(command.substr(0,5)=="echo ") std::cout<<command.substr(5)<<"\n";
-      else if(command.substr(0,5)=="type "){
-        if(builtin.count(command.substr(5))) std::cout<<command.substr(5)<<" is a shell builtin"<<"\n";
-        else std::cout<<command.substr(5)<<": not found"<<"\n";
+  while (true) {
+    std::cout << "$ ";
+    std::getline(std::cin, line);
+
+    std::stringstream ss(line);
+    std::string command;
+    ss >> command;
+
+    if (command == "exit") {
+      break;
+    }
+
+    else if (command == "echo") {
+      std::string word;
+      bool first = true;
+
+      while (ss >> word) {
+        if (!first) std::cout << " ";
+        std::cout << word;
+        first = false;
       }
-      else std::cout << command << ": command not found\n";
+      std::cout << "\n";
+    }
+
+    else if (command == "type") {
+
+      std::string check_command;
+      ss >> check_command;
+
+      if (builtin.count(check_command)) {
+        std::cout << check_command << " is a shell builtin\n";
+        continue;
+      }
+
+      bool found = false;
+
+      const char* path_env = std::getenv("PATH");
+      if (path_env) {
+
+        std::stringstream ss_path(path_env);
+        std::string path;
+
+        while (std::getline(ss_path, path, ':')) {
+
+          std::string full_path = path + "/" + check_command;
+
+          if (access(full_path.c_str(), X_OK) == 0) {
+            std::cout << check_command << " is " << full_path << "\n";
+            found = true;
+            break;
+          }
+        }
+      }
+
+      if (!found) {
+        std::cout << check_command << ": not found\n";
+      }
+    }
+
+    else {
+      std::cout << command << ": command not found\n";
+    }
   }
 }
