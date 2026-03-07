@@ -71,6 +71,12 @@ int main() {
         std::cout << check_command << ": not found\n";
       }
     }
+    else if(command=="pwd"){
+      char buffer[1024];
+      if (getcwd(buffer, sizeof(buffer)) != NULL) {
+          std::cout << buffer << std::endl;
+      }
+    }
 
     else {
 
