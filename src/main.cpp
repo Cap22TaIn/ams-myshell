@@ -73,7 +73,30 @@ int main() {
     }
 
     else {
-      std::cout << command << ": command not found\n";
+
+      bool found = false;
+
+      const char* path_env = std::getenv("PATH");
+
+      if (path_env) {
+        std::stringstream ss_path(path_env);
+        std::string path;
+
+        while (std::getline(ss_path, path, ':')) {
+
+          std::string full_path = path + "/" + command;
+
+          if (access(full_path.c_str(), X_OK) == 0) {
+            std::system(line.c_str()); 
+            found = true;
+            break;
+          }
+        }
+      }
+
+      if (!found) {
+        std::cout << command << ": command not found\n";
+      }
     }
   }
 }
