@@ -9,7 +9,7 @@ int main() {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
 
-  const std::unordered_set<std::string> builtin = {"echo","exit","type"};
+  const std::unordered_set<std::string> builtin = {"echo","exit","pwd","type"};
 
   std::string line;
 
