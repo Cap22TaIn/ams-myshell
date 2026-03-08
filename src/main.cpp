@@ -9,7 +9,7 @@ int main() {
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
 
-  const std::unordered_set<std::string> builtin = {"echo","exit","pwd","type"};
+  const std::unordered_set<std::string> builtin = {"cd","echo","exit","pwd","type"};
 
   std::string line;
 
@@ -20,11 +20,12 @@ int main() {
     std::stringstream ss(line);
     std::string command;
     ss >> command;
-
-    if (command == "exit") {
-      break;
+    if(command == "cd"){
+       std::string dir;
+       ss >> dir;
+       if(dir == "~") chdir(getenv("HOME"));
+       else chdir(dir.c_str());
     }
-
     else if (command == "echo") {
       std::string word;
       bool first = true;
@@ -35,6 +36,17 @@ int main() {
         first = false;
       }
       std::cout << "\n";
+    }
+
+    else if (command == "exit") {
+      break;
+    }
+
+    else if(command=="pwd"){
+      char buffer[1024];
+      if (getcwd(buffer, sizeof(buffer)) != NULL) {
+          std::cout << buffer << std::endl;
+      }
     }
 
     else if (command == "type") {
@@ -69,12 +81,6 @@ int main() {
 
       if (!found) {
         std::cout << check_command << ": not found\n";
-      }
-    }
-    else if(command=="pwd"){
-      char buffer[1024];
-      if (getcwd(buffer, sizeof(buffer)) != NULL) {
-          std::cout << buffer << std::endl;
       }
     }
 
