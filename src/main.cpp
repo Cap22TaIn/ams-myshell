@@ -24,7 +24,7 @@ int main() {
        std::string dir;
        ss >> dir;
        if(dir == "~") chdir(getenv("HOME"));
-       else if(access(dir.c_str(), F_OK)) chdir(dir.c_str());
+       else if(access(dir.c_str(), F_OK) == 0) chdir(dir.c_str());
        else std::cout << "cd:" << dir << ": No such file or directory" << "\n";
     }
     else if (command == "echo") {
