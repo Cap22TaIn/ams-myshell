@@ -2,114 +2,123 @@
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <vector>
 #include <unistd.h>
 #include <cstdlib>
+#include <cctype>
+
+using namespace std;
+
+vector<string> parse(const string& s) {
+    vector<string> args;
+    string cur;
+    bool in_quote = false;
+
+    for(char c : s) {
+        if(c == '\'') {
+            in_quote = !in_quote;
+        }
+        else if(isspace(c) && !in_quote) {
+            if(!cur.empty()) {
+                args.push_back(cur);
+                cur.clear();
+            }
+        }
+        else {
+            cur.push_back(c);
+        }
+    }
+
+    if(!cur.empty()) args.push_back(cur);
+    return args;
+}
+
+string find_command(const string& cmd) {
+    const char* path_env = getenv("PATH");
+    if(!path_env) return "";
+
+    stringstream ss(path_env);
+    string path;
+
+    while(getline(ss, path, ':')) {
+        string full = path + "/" + cmd;
+        if(access(full.c_str(), X_OK) == 0)
+            return full;
+    }
+
+    return "";
+}
 
 int main() {
-  std::cout << std::unitbuf;
-  std::cerr << std::unitbuf;
+    cout << unitbuf;
+    cerr << unitbuf;
 
-  const std::unordered_set<std::string> builtin = {"cd","echo","exit","pwd","type"};
+    const unordered_set<string> builtin = {"cd","echo","exit","pwd","type"};
+    string line;
 
-  std::string line;
+    while(true) {
+        cout << "$ ";
+        getline(cin, line);
 
-  while (true) {
-    std::cout << "$ ";
-    std::getline(std::cin, line);
+        auto args = parse(line);
+        if(args.empty()) continue;
 
-    std::stringstream ss(line);
-    std::string command;
-    ss >> command;
-    if(command == "cd"){
-       std::string dir;
-       ss >> dir;
-       if(dir == "~") chdir(getenv("HOME"));
-       else if(access(dir.c_str(), F_OK) == 0) chdir(dir.c_str());
-       else std::cout << "cd: " << dir << ": No such file or directory" << "\n";
-    }
-    else if (command == "echo") {
-      std::string word;
-      bool first = true;
+        const string& command = args[0];
 
-      while (ss >> word) {
-        if (!first) std::cout << " ";
-        std::cout << word;
-        first = false;
-      }
-      std::cout << "\n";
-    }
-
-    else if (command == "exit") {
-      break;
-    }
-
-    else if(command=="pwd"){
-      char buffer[1024];
-      if (getcwd(buffer, sizeof(buffer)) != NULL) {
-          std::cout << buffer << std::endl;
-      }
-    }
-
-    else if (command == "type") {
-
-      std::string check_command;
-      ss >> check_command;
-
-      if (builtin.count(check_command)) {
-        std::cout << check_command << " is a shell builtin\n";
-        continue;
-      }
-
-      bool found = false;
-
-      const char* path_env = std::getenv("PATH");
-      if (path_env) {
-
-        std::stringstream ss_path(path_env);
-        std::string path;
-
-        while (std::getline(ss_path, path, ':')) {
-
-          std::string full_path = path + "/" + check_command;
-
-          if (access(full_path.c_str(), X_OK) == 0) {
-            std::cout << check_command << " is " << full_path << "\n";
-            found = true;
+        if(command == "exit") {
             break;
-          }
         }
-      }
 
-      if (!found) {
-        std::cout << check_command << ": not found\n";
-      }
-    }
-
-    else {
-
-      bool found = false;
-
-      const char* path_env = std::getenv("PATH");
-
-      if (path_env) {
-        std::stringstream ss_path(path_env);
-        std::string path;
-
-        while (std::getline(ss_path, path, ':')) {
-
-          std::string full_path = path + "/" + command;
-
-          if (access(full_path.c_str(), X_OK) == 0) {
-            std::system(line.c_str()); 
-            found = true;
-            break;
-          }
+        else if(command == "echo") {
+            for(size_t i = 1; i < args.size(); i++) {
+                if(i > 1) cout << " ";
+                cout << args[i];
+            }
+            cout << "\n";
         }
-      }
 
-      if (!found) {
-        std::cout << command << ": command not found\n";
-      }
+        else if(command == "pwd") {
+            char buf[1024];
+            if(getcwd(buf, sizeof(buf)))
+                cout << buf << "\n";
+        }
+
+        else if(command == "cd") {
+            string dir = args.size() > 1 ? args[1] : "";
+
+            if(dir == "~")
+                dir = getenv("HOME");
+
+            if(chdir(dir.c_str()) != 0)
+                cout << "cd: " << dir << ": No such file or directory\n";
+        }
+
+        else if(command == "type") {
+            if(args.size() < 2) continue;
+
+            string target = args[1];
+
+            if(builtin.count(target)) {
+                cout << target << " is a shell builtin\n";
+            } 
+            else {
+                string path = find_command(target);
+                if(path.empty())
+                    cout << target << ": not found\n";
+                else
+                    cout << target << " is " << path << "\n";
+            }
+        }
+
+        else {
+            string path = find_command(command);
+
+            if(path.empty()) {
+                cout << command << ": command not found\n";
+            } 
+            else {
+                system(line.c_str());
+            }
+        }
     }
-  }
 }
