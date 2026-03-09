@@ -1,47 +1,25 @@
 #include <iostream>
-#include <sstream>
+#include <vector>
 #include <string>
 #include <unordered_set>
-#include <vector>
+#include <sstream>
 #include <unistd.h>
 #include <cstdlib>
-#include <cctype>
+#include <sys/wait.h>
+
+#include "parser.h"
 
 using namespace std;
-
-vector<string> parse(const string& s) {
-    vector<string> args;
-    string cur;
-    bool in_quote = false;
-
-    for(char c : s) {
-        if(c == '\'') {
-            in_quote = !in_quote;
-        }
-        else if(isspace(c) && !in_quote) {
-            if(!cur.empty()) {
-                args.push_back(cur);
-                cur.clear();
-            }
-        }
-        else {
-            cur.push_back(c);
-        }
-    }
-
-    if(!cur.empty()) args.push_back(cur);
-    return args;
-}
 
 string find_command(const string& cmd) {
     const char* path_env = getenv("PATH");
     if(!path_env) return "";
 
     stringstream ss(path_env);
-    string path;
+    string dir;
 
-    while(getline(ss, path, ':')) {
-        string full = path + "/" + cmd;
+    while(getline(ss, dir, ':')) {
+        string full = dir + "/" + cmd;
         if(access(full.c_str(), X_OK) == 0)
             return full;
     }
@@ -53,71 +31,111 @@ int main() {
     cout << unitbuf;
     cerr << unitbuf;
 
-    const unordered_set<string> builtin = {"cd","echo","exit","pwd","type"};
+    unordered_set<string> builtin = {"cd","echo","exit","pwd","type"};
     string line;
 
     while(true) {
+
         cout << "$ ";
         getline(cin, line);
 
-        auto args = parse(line);
-        if(args.empty()) continue;
+        auto args = parse_command(line);
 
-        const string& command = args[0];
+        if(args.empty())
+            continue;
 
-        if(command == "exit") {
+        string cmd = args[0];
+
+        // EXIT
+        if(cmd == "exit") {
             break;
         }
 
-        else if(command == "echo") {
-            for(size_t i = 1; i < args.size(); i++) {
-                if(i > 1) cout << " ";
-                cout << args[i];
+        // ECHO
+        else if(cmd == "echo") {
+
+            for(size_t i=1;i<args.size();i++){
+                if(i>1) cout<<" ";
+                cout<<args[i];
             }
-            cout << "\n";
+
+            cout<<"\n";
         }
 
-        else if(command == "pwd") {
+        // PWD
+        else if(cmd == "pwd") {
+
             char buf[1024];
-            if(getcwd(buf, sizeof(buf)))
-                cout << buf << "\n";
+
+            if(getcwd(buf,sizeof(buf)))
+                cout<<buf<<"\n";
         }
 
-        else if(command == "cd") {
-            string dir = args.size() > 1 ? args[1] : "";
+        // CD
+        else if(cmd == "cd") {
 
-            if(dir == "~")
+            string dir = args.size()>1 ? args[1] : "";
+
+            if(dir=="~")
                 dir = getenv("HOME");
 
             if(chdir(dir.c_str()) != 0)
-                cout << "cd: " << dir << ": No such file or directory\n";
+                cout<<"cd: "<<dir<<": No such file or directory\n";
         }
 
-        else if(command == "type") {
-            if(args.size() < 2) continue;
+        // TYPE
+        else if(cmd == "type") {
+
+            if(args.size()<2)
+                continue;
 
             string target = args[1];
 
-            if(builtin.count(target)) {
-                cout << target << " is a shell builtin\n";
-            } 
-            else {
+            if(builtin.count(target))
+                cout<<target<<" is a shell builtin\n";
+
+            else{
+
                 string path = find_command(target);
+
                 if(path.empty())
-                    cout << target << ": not found\n";
+                    cout<<target<<": not found\n";
+
                 else
-                    cout << target << " is " << path << "\n";
+                    cout<<target<<" is "<<path<<"\n";
             }
         }
 
+        // EXTERNAL COMMAND
         else {
-            string path = find_command(command);
 
-            if(path.empty()) {
-                cout << command << ": command not found\n";
-            } 
+            string path = find_command(cmd);
+
+            if(path.empty()){
+                cout<<cmd<<": command not found\n";
+                continue;
+            }
+
+            pid_t pid = fork();
+
+            if(pid == 0) {
+
+                vector<char*> argv;
+
+                for(auto& s : args)
+                    argv.push_back(const_cast<char*>(s.c_str()));
+
+                argv.push_back(nullptr);
+
+                execv(path.c_str(), argv.data());
+
+                exit(1);
+            }
+
             else {
-                system(line.c_str());
+
+                int status;
+                waitpid(pid, &status, 0);
             }
         }
     }
