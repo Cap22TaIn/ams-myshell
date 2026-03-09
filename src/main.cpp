@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #include "parser.h"
 
@@ -40,63 +41,103 @@ int main() {
         getline(cin, line);
 
         auto args = parse_command(line);
+        if(args.empty()) continue;
 
-        if(args.empty())
-            continue;
+        string outfile;
+        vector<string> cmd_args;
 
-        string cmd = args[0];
+        // Detect redirection
+        for(size_t i=0;i<args.size();i++) {
 
-        // EXIT
-        if(cmd == "exit") {
-            break;
-        }
-
-        // ECHO
-        else if(cmd == "echo") {
-
-            for(size_t i=1;i<args.size();i++){
-                if(i>1) cout<<" ";
-                cout<<args[i];
+            if(args[i] == ">" || args[i] == "1>") {
+                if(i+1 < args.size())
+                    outfile = args[i+1];
+                break;
             }
 
-            cout<<"\n";
+            cmd_args.push_back(args[i]);
+        }
+
+        string cmd = cmd_args[0];
+
+        // EXIT
+        if(cmd == "exit") break;
+
+        // ECHO
+        if(cmd == "echo") {
+
+            if(outfile.empty()) {
+                for(size_t i=1;i<cmd_args.size();i++){
+                    if(i>1) cout<<" ";
+                    cout<<cmd_args[i];
+                }
+                cout<<"\n";
+            }
+
+            else {
+                int fd = open(outfile.c_str(),
+                              O_WRONLY | O_CREAT | O_TRUNC,
+                              0644);
+
+                for(size_t i=1;i<cmd_args.size();i++){
+                    if(i>1) dprintf(fd," ");
+                    dprintf(fd,"%s",cmd_args[i].c_str());
+                }
+
+                dprintf(fd,"\n");
+                close(fd);
+            }
+
+            continue;
         }
 
         // PWD
-        else if(cmd == "pwd") {
+        if(cmd == "pwd") {
 
             char buf[1024];
+            getcwd(buf,sizeof(buf));
 
-            if(getcwd(buf,sizeof(buf)))
+            if(outfile.empty())
                 cout<<buf<<"\n";
+
+            else{
+                int fd=open(outfile.c_str(),
+                            O_WRONLY|O_CREAT|O_TRUNC,
+                            0644);
+
+                dprintf(fd,"%s\n",buf);
+                close(fd);
+            }
+
+            continue;
         }
 
         // CD
-        else if(cmd == "cd") {
+        if(cmd == "cd") {
 
-            string dir = args.size()>1 ? args[1] : "";
+            string dir = cmd_args.size()>1 ? cmd_args[1] : "";
 
-            if(dir=="~")
-                dir = getenv("HOME");
+            if(dir=="~") dir=getenv("HOME");
 
-            if(chdir(dir.c_str()) != 0)
+            if(chdir(dir.c_str())!=0)
                 cout<<"cd: "<<dir<<": No such file or directory\n";
+
+            continue;
         }
 
         // TYPE
-        else if(cmd == "type") {
+        if(cmd == "type") {
 
-            if(args.size()<2)
-                continue;
+            if(cmd_args.size()<2) continue;
 
-            string target = args[1];
+            string target=cmd_args[1];
 
             if(builtin.count(target))
                 cout<<target<<" is a shell builtin\n";
 
             else{
 
-                string path = find_command(target);
+                string path=find_command(target);
 
                 if(path.empty())
                     cout<<target<<": not found\n";
@@ -104,39 +145,48 @@ int main() {
                 else
                     cout<<target<<" is "<<path<<"\n";
             }
+
+            continue;
         }
 
         // EXTERNAL COMMAND
-        else {
 
-            string path = find_command(cmd);
+        string path=find_command(cmd);
 
-            if(path.empty()){
-                cout<<cmd<<": command not found\n";
-                continue;
+        if(path.empty()){
+            cout<<cmd<<": command not found\n";
+            continue;
+        }
+
+        pid_t pid=fork();
+
+        if(pid==0){
+
+            if(!outfile.empty()){
+
+                int fd=open(outfile.c_str(),
+                            O_WRONLY|O_CREAT|O_TRUNC,
+                            0644);
+
+                dup2(fd,STDOUT_FILENO);
+                close(fd);
             }
 
-            pid_t pid = fork();
+            vector<char*> argv;
 
-            if(pid == 0) {
+            for(auto& s:cmd_args)
+                argv.push_back(const_cast<char*>(s.c_str()));
 
-                vector<char*> argv;
+            argv.push_back(nullptr);
 
-                for(auto& s : args)
-                    argv.push_back(const_cast<char*>(s.c_str()));
+            execv(path.c_str(),argv.data());
 
-                argv.push_back(nullptr);
+            exit(1);
+        }
 
-                execv(path.c_str(), argv.data());
-
-                exit(1);
-            }
-
-            else {
-
-                int status;
-                waitpid(pid, &status, 0);
-            }
+        else{
+            int status;
+            waitpid(pid,&status,0);
         }
     }
 }
