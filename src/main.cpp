@@ -56,22 +56,22 @@ int main()
 
         vector<string> cmd_args;
 
+        // parse redirections and build command args
         for(size_t i=0;i<args.size();i++)
         {
-            if(args[i]=="?>" || args[i]=="1>")
+            if(args[i]==">" || args[i]=="1>")
             {
-                outfile=args[i+1];
-                i++;
-            }
-            else if(args[i]==">")
-            {
-                outfile=args[i+1];
-                i++;
+                if(i+1 < args.size()) {
+                    outfile=args[i+1];
+                    i++;
+                }
             }
             else if(args[i]=="2>")
             {
-                errfile=args[i+1];
-                i++;
+                if(i+1 < args.size()) {
+                    errfile=args[i+1];
+                    i++;
+                }
             }
             else
             {
@@ -81,6 +81,16 @@ int main()
 
         if(cmd_args.empty())
             continue;
+
+        // Ensure redirected files exist (create/truncate) BEFORE executing builtins
+        if(!outfile.empty()) {
+            int fd = open(outfile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if(fd >= 0) close(fd);
+        }
+        if(!errfile.empty()) {
+            int fd = open(errfile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if(fd >= 0) close(fd);
+        }
 
         string cmd=cmd_args[0];
 
@@ -113,8 +123,10 @@ int main()
                             O_WRONLY|O_CREAT|O_TRUNC,
                             0644);
 
-                dprintf(fd,"%s\n",buf);
-                close(fd);
+                if(fd>=0) {
+                    dprintf(fd,"%s\n",buf);
+                    close(fd);
+                }
             }
 
             continue;
@@ -138,15 +150,16 @@ int main()
                             O_WRONLY|O_CREAT|O_TRUNC,
                             0644);
 
-                for(size_t i=1;i<cmd_args.size();i++)
-                {
-                    if(i>1) dprintf(fd," ");
-                    dprintf(fd,"%s",cmd_args[i].c_str());
+                if(fd>=0) {
+                    for(size_t i=1;i<cmd_args.size();i++)
+                    {
+                        if(i>1) dprintf(fd," ");
+                        dprintf(fd,"%s",cmd_args[i].c_str());
+                    }
+
+                    dprintf(fd,"\n");
+                    close(fd);
                 }
-
-                dprintf(fd,"\n");
-
-                close(fd);
             }
 
             continue;
@@ -193,8 +206,10 @@ int main()
                             O_WRONLY|O_CREAT|O_TRUNC,
                             0644);
 
-                dup2(fd,STDOUT_FILENO);
-                close(fd);
+                if(fd>=0) {
+                    dup2(fd,STDOUT_FILENO);
+                    close(fd);
+                }
             }
 
             if(!errfile.empty())
@@ -203,8 +218,10 @@ int main()
                             O_WRONLY|O_CREAT|O_TRUNC,
                             0644);
 
-                dup2(fd,STDERR_FILENO);
-                close(fd);
+                if(fd>=0) {
+                    dup2(fd,STDERR_FILENO);
+                    close(fd);
+                }
             }
 
             vector<char*> argv;
